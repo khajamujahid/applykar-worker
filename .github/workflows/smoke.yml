@@ -46,7 +46,7 @@ jobs:
         run: |
           for i in 1 2 3 4 5 6 7; do pnpm apply:worker -- --once; done
           psql "$DATABASE_URL" -c "select source, status, count(*) from bulk_items group by 1,2 order by 1,2"
-          psql "$DATABASE_URL" -c "select company_name, source, status, left(coalesce(detail,''),140) detail from bulk_items order by finished_at desc nulls last limit 25"
+          psql "$DATABASE_URL" -c "select company_name, source, status, left(coalesce(detail,''),140) detail from bulk_items limit 25"
       - name: Ingest smoke (mass ingest, 2 minutes)
         env:
           INGEST_MAX_MINUTES: "2"
