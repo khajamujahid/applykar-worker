@@ -1,0 +1,64 @@
+name: Signed-in smoke test (Neon test branch)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      DATABASE_URL: ${{ secrets.SMOKE_DATABASE_URL }}
+      AUTH_URL: http://localhost:4317
+      AUTH_TRUST_HOST: "true"
+      ALLOWED_EMAILS: khajamujahiddin@gmail.com
+      E2E_AUTH: "1"
+      SR_DETAILS: "0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: khajamujahid/applykar
+          ref: main
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm db:migrate
+      - name: Build and start
+        run: |
+          export AUTH_SECRET=$(openssl rand -hex 32)
+          echo "AUTH_SECRET=$AUTH_SECRET" >> "$GITHUB_ENV"
+          pnpm build
+          (pnpm start > server.log 2>&1 &)
+          for i in $(seq 1 60); do curl -sf http://localhost:4317/login >/dev/null && break; sleep 2; done
+      - name: Smoke pages, filters, Apply 20
+        run: pnpm exec tsx scripts/smoke.ts
+      - name: Worker processes queue (dry run, no submit)
+        env:
+          APPLY_SUBMIT: "0"
+          APPLY_CONCURRENCY: "3"
+          MAIL_WAIT_ATTEMPTS: "1"
+        run: |
+          for i in 1 2 3 4 5 6 7; do pnpm apply:worker -- --once; done
+          psql "$DATABASE_URL" -c "select source, status, count(*) from bulk_items group by 1,2 order by 1,2"
+          psql "$DATABASE_URL" -c "select company_name, source, status, left(coalesce(detail,''),140) detail from bulk_items order by finished_at desc nulls last limit 25"
+      - name: Ingest smoke (mass ingest, 2 minutes)
+        env:
+          INGEST_MAX_MINUTES: "2"
+        run: pnpm ingest:mass
+      - if: always()
+        run: tail -50 server.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-proofs
+          path: |
+            data/smoke
+            data/proofs
+          if-no-files-found: ignore
+          retention-days: 7
