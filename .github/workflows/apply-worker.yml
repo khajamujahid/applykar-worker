@@ -2,7 +2,8 @@ name: Apply worker
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    # Runs inside the ingest window (even hours :10-:50) so the Neon compute is already awake.
+    - cron: "20,50 */2 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -16,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: khajamujahiddin/applykar
+          repository: khajamujahid/applykar
           ref: main
       - uses: pnpm/action-setup@v4
         with:
@@ -34,6 +35,8 @@ jobs:
       - name: Apply queued jobs
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
+          APPLYKAR_URL: https://applykar-khajamujahids-projects.vercel.app
           ALLOWED_EMAILS: khajamujahiddin@gmail.com
           APPLY_SUBMIT: "1"
           APPLY_CONCURRENCY: "2"

@@ -1,0 +1,42 @@
+name: Job feed ingest
+
+on:
+  schedule:
+    - cron: "10 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Time budget in minutes"
+        default: "38"
+
+concurrency:
+  group: applykar-ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 200
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: khajamujahid/applykar
+          ref: main
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: pnpm db:migrate
+      - name: Ingest US jobs from public ATS boards
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          INGEST_MAX_MINUTES: ${{ github.event.inputs.minutes || '38' }}
+          INGEST_CONCURRENCY: "32"
+        run: pnpm ingest:mass
