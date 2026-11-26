@@ -2,12 +2,12 @@ name: Job feed ingest
 
 on:
   schedule:
-    - cron: "10 */2 * * *"
+    - cron: "5 * * * *"
   workflow_dispatch:
     inputs:
       minutes:
         description: "Time budget in minutes"
-        default: "38"
+        default: "20"
 
 concurrency:
   group: applykar-ingest
@@ -37,6 +37,6 @@ jobs:
       - name: Ingest US jobs from public ATS boards
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          INGEST_MAX_MINUTES: ${{ github.event.inputs.minutes || '38' }}
+          INGEST_MAX_MINUTES: ${{ github.event.inputs.minutes || '20' }}
           INGEST_CONCURRENCY: "32"
         run: pnpm ingest:mass

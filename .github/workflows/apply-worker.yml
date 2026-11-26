@@ -2,8 +2,8 @@ name: Apply worker
 
 on:
   schedule:
-    # Runs inside the ingest window (even hours :10-:50) so the Neon compute is already awake.
-    - cron: "20,50 */2 * * *"
+    # Runs inside the hourly ingest window (:05-:25) so the Neon compute is already awake.
+    - cron: "12,24 * * * *"
   workflow_dispatch:
 
 concurrency:
