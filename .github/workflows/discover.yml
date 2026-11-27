@@ -1,0 +1,49 @@
+name: Board discovery (daily)
+
+on:
+  schedule:
+    - cron: "40 6 * * *"
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Time budget in minutes"
+        default: "45"
+      name_probes:
+        description: "Cross-ATS name checks this run"
+        default: "200000"
+
+concurrency:
+  group: applykar-discovery
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: khajamujahid/applykar
+          ref: main
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: pnpm db:migrate
+      - name: Discover new company boards
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
+          DISCOVER_MAX_MINUTES: ${{ github.event.inputs.minutes || '45' }}
+          DISCOVER_NAME_PROBES: ${{ github.event.inputs.name_probes || '200000' }}
+        run: pnpm discover
