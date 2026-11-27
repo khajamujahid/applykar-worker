@@ -27,6 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 200
     steps:
+      - run: echo "RUN_T0=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
           repository: khajamujahid/applykar
@@ -58,7 +59,6 @@ jobs:
           since=$(date -u -d '-23 hours' +%Y-%m-%dT%H:%M:%SZ)
           recent=$(gh run list -R "$REPO" -w discover.yml -L 5 --json createdAt -q "[.[] | select(.createdAt > \"$since\")] | length")
           if [ "${recent:-0}" = "0" ]; then gh workflow run discover.yml -R "$REPO"; echo "queued daily discovery"; fi
-          started=$(date -d "${{ github.run_started_at }}" +%s 2>/dev/null || date +%s)
-          wait=$(( started + 3600 - $(date +%s) ))
+          wait=$(( ${RUN_T0:-$(date +%s)} + 3600 - $(date +%s) ))
           if [ "$wait" -gt 0 ]; then echo "sleeping ${wait}s"; sleep "$wait"; fi
           gh workflow run ingest.yml -R "$REPO"
