@@ -8,10 +8,19 @@ on:
       minutes:
         description: "Time budget in minutes"
         default: "20"
+      chain:
+        description: "Queue the next run when done (1/0)"
+        default: "1"
 
 concurrency:
   group: applykar-ingest
   cancel-in-progress: false
+
+# GitHub's cron is best-effort and has been skipping these slots, so each run also queues the next one (about an hour
+# after it started) and makes sure the daily discovery ran. Sleeping costs nothing on a public repo and lets Neon idle.
+permissions:
+  contents: read
+  actions: write
 
 jobs:
   ingest:
@@ -40,3 +49,16 @@ jobs:
           INGEST_MAX_MINUTES: ${{ github.event.inputs.minutes || '20' }}
           INGEST_CONCURRENCY: "32"
         run: pnpm ingest:mass
+      - name: Queue the next hourly run (and daily discovery)
+        if: ${{ !cancelled() && github.event.inputs.chain != '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          since=$(date -u -d '-23 hours' +%Y-%m-%dT%H:%M:%SZ)
+          recent=$(gh run list -R "$REPO" -w discover.yml -L 5 --json createdAt -q "[.[] | select(.createdAt > \"$since\")] | length")
+          if [ "${recent:-0}" = "0" ]; then gh workflow run discover.yml -R "$REPO"; echo "queued daily discovery"; fi
+          started=$(date -d "${{ github.run_started_at }}" +%s 2>/dev/null || date +%s)
+          wait=$(( started + 3600 - $(date +%s) ))
+          if [ "$wait" -gt 0 ]; then echo "sleeping ${wait}s"; sleep "$wait"; fi
+          gh workflow run ingest.yml -R "$REPO"
